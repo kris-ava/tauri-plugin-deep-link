@@ -22,7 +22,6 @@ type THandler = OnceCell<Mutex<Box<dyn FnMut(String) + Send + 'static>>>;
 static HANDLER: THandler = OnceCell::new();
 
 pub fn register<F: FnMut(String) + Send + 'static>(_scheme: &str, handler: F) -> Result<()> {
-    panic!("panic");
     println!("hello is it me you are looking for?");
     listen(handler)?;
 
