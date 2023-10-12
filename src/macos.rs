@@ -13,6 +13,7 @@ use objc2::{
     sel, ClassType,
 };
 use once_cell::sync::OnceCell;
+use log::{warn, debug};
 
 use crate::ID;
 
@@ -22,7 +23,7 @@ type THandler = OnceCell<Mutex<Box<dyn FnMut(String) + Send + 'static>>>;
 static HANDLER: THandler = OnceCell::new();
 
 pub fn register<F: FnMut(String) + Send + 'static>(_scheme: &str, handler: F) -> Result<()> {
-    println!("hello is it me you are looking for?");
+    warn!(target: "deep-link", "registering");
     listen(handler)?;
 
     Ok(())
@@ -39,6 +40,7 @@ const EVENT_GET_URL: u32 = 0x4755524c;
 
 // Adapted from https://github.com/mrmekon/fruitbasket/blob/aad14e400d710d1d46317c0d8c55ff742bfeaadd/src/osx.rs#L848
 fn parse_url_event(event: *mut AnyObject) -> Option<String> {
+    warn!(target: "deep-link", "parse_url_event");
     if event as u64 == 0u64 {
         return None;
     }
@@ -49,6 +51,7 @@ fn parse_url_event(event: *mut AnyObject) -> Option<String> {
             return None;
         }
 
+        warn!(target: "deep-link", "stuff1");
         let subevent: *mut AnyObject = msg_send![event, paramDescriptorForKeyword: 0x2d2d2d2d_u32];
         let nsstring: *mut AnyObject = msg_send![subevent, stringValue];
         let cstr: *const i8 = msg_send![nsstring, UTF8String];
@@ -72,6 +75,7 @@ declare_class!(
     unsafe impl Handler {
         #[method(handleEvent:withReplyEvent:)]
         fn handle_event(&self, event: *mut AnyObject, _replace: *const AnyObject) {
+            warn!(target: "deep-link", "handle_event");
             let s = parse_url_event(event).unwrap_or_default();
             let mut cb = HANDLER.get().unwrap().lock().unwrap();
             cb(s);
@@ -82,6 +86,7 @@ declare_class!(
 impl Handler {
     pub fn new() -> Id<Self> {
         let cls = Self::class();
+        warn!(target: "deep-link", "new handler");
         unsafe { msg_send_id![msg_send_id![cls, alloc], init] }
     }
 }
@@ -105,6 +110,7 @@ fn secondary_handler(s: String) {
 }
 
 pub fn listen<F: FnMut(String) + Send + 'static>(handler: F) -> Result<()> {
+    warn!(target: "deep-link", "listen");
     #[cfg(debug_assertions)]
     let addr = format!(
         "/tmp/{}-deep-link.sock",
@@ -139,13 +145,18 @@ pub fn listen<F: FnMut(String) + Send + 'static>(handler: F) -> Result<()> {
         ));
     }
 
+
+    warn!(target: "deep-link", "handler set");
+
     unsafe {
+        warn!(target: "deep-link", "registering handler");
         let event_manager: Id<AnyObject> =
             msg_send_id![class!(NSAppleEventManager), sharedAppleEventManager];
 
         let handler = Handler::new();
         let handler_boxed = Box::into_raw(Box::new(handler));
 
+        warn!(target: "deep-link", "stuff44");
         let _: () = msg_send![&event_manager,
             setEventHandler: &**handler_boxed
             andSelector: sel!(handleEvent:withReplyEvent:)
@@ -180,6 +191,7 @@ pub fn listen<F: FnMut(String) + Send + 'static>(handler: F) -> Result<()> {
 }
 
 pub fn prepare(identifier: &str) {
+    warn!(target: "deep-link", "prepare");
     ID.set(identifier.to_string())
         .expect("prepare() called more than once with different identifiers.");
 }
